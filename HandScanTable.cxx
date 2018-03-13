@@ -20,12 +20,19 @@ namespace ftune {
       int subrun;
       int event;
       int vtxid;
+      float ll;
+      int goodreco;
+      int goodscan;
       char leftover[200];
-      sscanf( line.c_str(), "%d\t%d\t%d\%d\t%s",&run,&subrun,&event,&vtxid,leftover);
-      //std::cout << run << " " << subrun << " " << event << " " << vtxid << std::endl;
+      sscanf( line.c_str(), "%d\t%d\t%d\t%d\t%f\t%d\t%d\t%s",&run,&subrun,&event,&vtxid,&ll,&goodreco,&goodscan,leftover);
 
-      RSE rse(run,subrun,event);
-      m_map_rse2vertexid.insert( std::make_pair<ftune::HandScanTable::RSE,int>(std::move(rse),std::move(vtxid)) );
+      // for debug
+      //std::cout << run << " " << subrun << " " << event << " " << vtxid << " goodscan=" << goodscan << std::endl;
+
+      if ( goodscan==1 ) {
+	RSE rse(run,subrun,event);
+	m_map_rse2vertexid.insert( std::make_pair<ftune::HandScanTable::RSE,int>(std::move(rse),std::move(vtxid)) );
+      }
       
     }
 

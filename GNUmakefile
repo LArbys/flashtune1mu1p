@@ -26,7 +26,7 @@ CXXFLAGS += -I. $(shell root-config --cflags)
 #LDFLAGS += $(shell larlite-config --libs) -lBasicTool_FhiclLite
 #LDFLAGS += $(shell larlite-config --libs) -lSelectionTool_OpT0FinderAna -lSelectionTool_OpT0FinderApp \
 	-lSelectionTool_OpT0PhotonLibrary -lSelectionTool_OpT0FinderAlgorithms -lSelectionTool_OpT0FinderBase 
-LDFLAGS += $(shell root-config --libs) -lPhysics -lMatrix -g
+LDFLAGS += $(shell root-config --libs) -lPhysics -lMatrix -lMinuit2
 #ifeq ($(LARLITECV_OPENCV),1)
 #endif
 
