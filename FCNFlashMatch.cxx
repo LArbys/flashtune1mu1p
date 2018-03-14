@@ -15,6 +15,7 @@ namespace ftune {
     m_goodreco_info = new HandScanTable( handscantable );
 
     fNEntries = m_goodreco_info->numEntries();
+    fShapeOnly = false;
 
     std::cout << "Number of Good Reco Entries: " << fNEntries << std::endl;
     
@@ -36,6 +37,8 @@ namespace ftune {
     // TBranch* bpe_hypo = 0;
     float pe_data[32];
     float pe_hypo[32];
+    float longestdir[3];
+    float vertex[3];
 
     TFile froot( flashdata.c_str() );
     TTree* tree = (TTree*)froot.Get("ffmatch");
@@ -45,6 +48,8 @@ namespace ftune {
     tree->SetBranchAddress( "vertexid", &vtxid );
     tree->SetBranchAddress( "data_pe", pe_data );
     tree->SetBranchAddress( "hypo_pe_1mu1p", pe_hypo );
+    tree->SetBranchAddress( "longestdir", longestdir );
+    tree->SetBranchAddress( "vtxpos", vertex );
 
     unsigned long ientry = 0;
     unsigned long bytes = tree->GetEntry(ientry);
@@ -73,6 +78,15 @@ namespace ftune {
 	rsev[2] = event;
 	rsev[3] = vtxid;
 	m_rse.push_back( rsev );
+	std::vector<float> pos(3);
+	for (int i=0; i<3; i++)
+	  pos[i] = vertex[i];
+	std::vector<float> dir(3);
+	for (int i=0; i<3; i++)
+	  dir[i] = longestdir[i];
+	m_pos.push_back(pos);
+	m_dir.push_back(dir);
+	
 	idata_entry++;
       }
       
@@ -98,10 +112,11 @@ namespace ftune {
     m_hypo_array.clear();
   }
   
-  //double FCNFlashMatch::operator() (const std::vector<double>& x) const {
   double FCNFlashMatch::DoEval( const double* x ) const {
     
-    float globalfactor = x[0];
+    float globalfactor = 1;
+    //if ( !fShapeOnly )
+    globalfactor = x[32];
 
     // std::cout << "pars [ ";
     // for (int i=0; i<33; i++)
@@ -111,29 +126,53 @@ namespace ftune {
     float chi2 = 0;
     for (int ientry=0; ientry<fNEntries; ientry++) {
       float chi2_entry = 0.;
+      float norm_hypo = 1.0;
+      float norm_data = 1.0;
+      if ( fShapeOnly ) {
+	norm_hypo = 0.;
+	norm_data = 0.;
+	for (int ich=0; ich<32; ich++) {
+	  float pmtfactor = x[ich];
+	  float pred = m_hypo_array[ ientry*32 + ich ]*globalfactor*pmtfactor; // we allow for global correction and per-pmt correction
+	  if ( pred<1.0e-3 )
+	    pred = 1.0e-3;
+	  norm_hypo += pred;
+	  norm_data += m_data_array[ientry*32 + ich];
+	}
+      }
+
       for (int ich=0; ich<32; ich++) {
 	float obs  = m_data_array[ ientry*32 + ich ];
-	float pred = m_hypo_array[ ientry*32 + ich ]*globalfactor*x[ich+1]; // we allow for global correction and per-pmt correction
+	float pmtfactor = x[ich];
+	float pred = m_hypo_array[ ientry*32 + ich ]*globalfactor*pmtfactor; // we allow for global correction and per-pmt correction
 	if ( pred<1.0e-3)
 	  pred = 1.0e-3;
-	float diff = obs-pred;
-	float err = sqrt( obs*obs + pred*pred );
+	float diff = (obs/norm_data)-(pred/norm_hypo);
+	float fracerr_obs  = 0.0;
+	if ( obs>0 )
+	  sqrt(obs)/obs;
+	float fracerr_pred = sqrt(pred)/pred;
+	float err_obs  = (obs/norm_data)*fracerr_obs;
+	float err_pred = (pred/norm_hypo)*fracerr_pred;
+	//float err = sqrt( err_obs*err_obs + err_pred*err_pred );
+	float err = pred/norm_hypo;
 	chi2_entry += diff*diff/err;
       }
-      //std::cout << "  " << chi2_entry << std::endl;
       chi2 += chi2_entry;
     }
 
     chi2 /= (fNEntries*32-33); // number of bins we're fitting - dof
     
-    std::cout << "total chi2=" << chi2 << std::endl;
+    //std::cout << "total chi2=" << chi2 << std::endl;
     //std::cin.get();
     return chi2;
   };
 
   void FCNFlashMatch::EvalChi2( const double* x ) {
     
-    float globalfactor = x[0];
+    float globalfactor = 1;
+    //if ( !fShapeOnly )
+    globalfactor = x[32];
 
     // std::cout << "pars [ ";
     // for (int i=0; i<33; i++)
@@ -142,16 +181,34 @@ namespace ftune {
     
     for (int ientry=0; ientry<fNEntries; ientry++) {
       float chi2_entry = 0.;
+      float norm_hypo = 1.0;
+      float norm_data = 1.0;
+      if ( fShapeOnly ) {
+	norm_hypo = 0.;
+	for (int ich=0; ich<32; ich++) {
+	  float pred = m_hypo_array[ ientry*32 + ich ]*globalfactor*x[ich]; // we allow for global correction and per-pmt correction
+	  if ( pred<1.0e-3 )
+	    pred = 1.0e-3;
+	  norm_hypo += pred;
+	  norm_data += m_data_array[ientry*32 + ich];
+	}
+      }
       for (int ich=0; ich<32; ich++) {
-	float obs  = m_data_array[ ientry*32 + ich ];
-	float pred = m_hypo_array[ ientry*32 + ich ]*globalfactor*x[ich+1]; // we allow for global correction and per-pmt correction
+	float obs  = m_data_array[ ientry*32 + ich ]/norm_data;
+	float pred = m_hypo_array[ ientry*32 + ich ]*globalfactor*x[ich]/norm_hypo; // we allow for global correction and per-pmt correction
 	if ( pred<1.0e-3)
 	  pred = 1.0e-3;
 	float diff = obs-pred;
-	float err = sqrt( obs*obs + pred*pred );
+	float fracerr_obs  = 0.0;
+	if (obs>0)
+	  fracerr_obs = sqrt(obs)/obs;
+	float fracerr_pred = sqrt(pred)/pred;
+	float err_obs  = (obs/norm_data)*fracerr_obs;
+	float err_pred = (pred/norm_hypo)*fracerr_pred;
+	float err = pred;
 	chi2_entry += diff*diff/err;
       }
-      //std::cout << "  " << chi2_entry << std::endl;
+      // store chi2-entry
       m_last_chi2[ientry] = chi2_entry;
     }
 
@@ -170,16 +227,42 @@ namespace ftune {
 
   std::vector<float> FCNFlashMatch::GetEntryDataPE( int ientry ) {
     std::vector<float> pe(32);
+    float norm = 1.0;
+    if ( fShapeOnly ) {
+      norm = 0.;
+      for (int i=0; i<32; i++)
+	norm += m_data_array[ 32*ientry+i ];
+    }
+      
     for ( int i=0; i<32; i++) {
-      pe[i] = m_data_array[ 32*ientry + i ];
+      pe[i] = m_data_array[ 32*ientry + i ]/norm;
     }
     return pe;
   }
   
-  std::vector<float> FCNFlashMatch::GetEntryHypoPE( int ientry ) {
+  std::vector<float> FCNFlashMatch::GetEntryHypoPE( int ientry, bool shapeonly, const double *pars ) {
     std::vector<float> pe(32);
+
+    float globalfactor = 1.0;
+    if ( pars!=NULL )
+      globalfactor = pars[32];
+    
+    std::vector<float> pmtfactors(32,1.0);
+    if ( pars!=NULL ) {
+      for (int i=0; i<32; i++)
+	pmtfactors[i] = pars[i];
+    }
+
+    float norm = 1.0;
+    if (shapeonly ) {
+      norm = 0.;
+      for (int i=0; i<32; i++) {
+	norm += m_hypo_array[ 32*ientry+i ]*pmtfactors[i];
+      }
+    }
+    
     for ( int i=0; i<32; i++) {
-      pe[i] = m_hypo_array[ 32*ientry + i ];
+      pe[i] = m_hypo_array[ 32*ientry + i ]*pmtfactors[i]/norm;
     }
     return pe;
   }
