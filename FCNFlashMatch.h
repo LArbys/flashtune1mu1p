@@ -15,8 +15,10 @@ namespace ftune {
 
   public:
 
+    typedef enum { kMuon, kElectron } HypoType; 
+    
     FCNFlashMatch() {};
-    FCNFlashMatch( std::string handscantable, std::string flashdata );
+    FCNFlashMatch( std::string handscantable, std::string flashdata, FCNFlashMatch::HypoType hypotype=kMuon );
     virtual ~FCNFlashMatch();
 
     //virtual double operator() (const std::vector<double>& x) const;

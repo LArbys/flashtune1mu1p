@@ -24,7 +24,9 @@ int main( int nargs, char ** argv ) {
   min.SetTolerance(0.01);
 
   // Function
-  ftune::FCNFlashMatch llflash( "goodrecohandscan_1mu1p.tab", "flashdata.root" );
+  //ftune::FCNFlashMatch llflash( "goodrecohandscan_1mu1p.tab", "flashdata.root" );
+  //ftune::FCNFlashMatch llflash( "", "flashdata_extbnb.root" );
+  ftune::FCNFlashMatch llflash( "", "flashdata_shower.root", ftune::FCNFlashMatch::kElectron );
   llflash.fitShapeOnly(fShapeOnly);
 
   double step = 0.01;
@@ -47,7 +49,7 @@ int main( int nargs, char ** argv ) {
     
   }
   
-  min.Minimize();
+  //min.Minimize();
 
   min.PrintResults();
   const double* pars = min.X();
@@ -56,6 +58,17 @@ int main( int nargs, char ** argv ) {
   }
 
   llflash.EvalChi2( pars );
+
+  int chi2pass = 0;
+  int allchi2 = 0;
+  for (int i=0; i<llflash.GetEntries(); i++) {
+    float chi2 = llflash.GetEntryLastChi2(i);
+    if ( chi2<3.0 )
+      chi2pass++;
+    allchi2++;
+  }
+
+  std::cout << "Vertices passing: " << chi2pass << " (" << float(chi2pass)/allchi2*100.0 << "%)" << std::endl;
   
   // print out hists ...
   if ( printHists ) {

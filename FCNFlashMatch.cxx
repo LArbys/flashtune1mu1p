@@ -9,32 +9,29 @@
 
 namespace ftune {
 
-  FCNFlashMatch::FCNFlashMatch( std::string handscantable, std::string flashdata ) {
+  FCNFlashMatch::FCNFlashMatch( std::string handscantable, std::string flashdata, FCNFlashMatch::HypoType hypotype ) {
 
     // load hand-scan table
-    m_goodreco_info = new HandScanTable( handscantable );
+    if ( !handscantable.empty() ) {
+      m_goodreco_info = new HandScanTable( handscantable );
+      fNEntries = m_goodreco_info->numEntries();
+      std::cout << "HandScanTable Loaded w/ " << fNEntries << "." << std::endl;
+    }
+    else {
+      m_goodreco_info = nullptr;
+      fNEntries = -1;
+      std::cout << "No HandScanTable Loaded." << std::endl;
+    }
 
-    fNEntries = m_goodreco_info->numEntries();
     fShapeOnly = false;
 
-    std::cout << "Number of Good Reco Entries: " << fNEntries << std::endl;
-    
-    // data tables
-    m_data_array.resize(32*fNEntries,0);
-
-    // hypo thesis tables
-    m_hypo_array.resize(32*fNEntries,0);
-    
+        
     // load flash data
     int run;
     int subrun;
     int event;
     int vtxid;
 
-    // std::vector<float>* pe_data = 0;
-    // std::vector<float>* pe_hypo = 0;
-    // TBranch* bpe_data = 0;
-    // TBranch* bpe_hypo = 0;
     float pe_data[32];
     float pe_hypo[32];
     float longestdir[3];
@@ -47,10 +44,22 @@ namespace ftune {
     tree->SetBranchAddress( "event", &event );
     tree->SetBranchAddress( "vertexid", &vtxid );
     tree->SetBranchAddress( "data_pe", pe_data );
-    tree->SetBranchAddress( "hypo_pe_1mu1p", pe_hypo );
+    if ( hypotype=kMuon )
+      tree->SetBranchAddress( "hypo_pe_1mu1p", pe_hypo );
+    else
+      tree->SetBranchAddress( "hypo_pe_1e1p", pe_hypo );
     tree->SetBranchAddress( "longestdir", longestdir );
     tree->SetBranchAddress( "vtxpos", vertex );
 
+    fNEntries = tree->GetEntries();
+    std::cout << "Number of Good Reco Entries: " << fNEntries << std::endl;    
+    
+    // data tables
+    m_data_array.resize(32*fNEntries,0);
+
+    // hypo thesis tables
+    m_hypo_array.resize(32*fNEntries,0);
+    
     unsigned long ientry = 0;
     unsigned long bytes = tree->GetEntry(ientry);
 
@@ -58,7 +67,9 @@ namespace ftune {
     while ( bytes>0 ) {
 
       // we using this vertex?
-      int entry_goodvtx = m_goodreco_info->GetVertexID( run, subrun, event );
+      int entry_goodvtx = -1;
+      if ( m_goodreco_info )
+	entry_goodvtx = m_goodreco_info->GetVertexID( run, subrun, event );
 
       // std::cout << "entry " << ientry << ": "
       // 		<< "(rse)=(" << run << "," << subrun << "," << event << ") "
@@ -66,7 +77,7 @@ namespace ftune {
       // 		<< "goodvtx=" << entry_goodvtx
       // 		<< std::endl;
       
-      if ( entry_goodvtx==vtxid ) {
+      if ( entry_goodvtx==vtxid || m_goodreco_info==nullptr) {
 	// a good vertex. copy into data arrays
 	for (int ich=0; ich<32; ich++) {
 	  m_data_array[ 32*idata_entry + ich ] = pe_data[ich];
